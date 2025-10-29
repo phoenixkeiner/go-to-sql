@@ -274,7 +274,7 @@ func analyzeColumns(headers []string, rows [][]string) []ColumnInfo {
 
 	for i, header := range headers {
 		columns[i].Name = header
-		columns[i].DataType = "TEXT"
+		columns[i].DataType = "NVARCHAR(MAX)"
 		columns[i].IsMoney = isMoney(header)
 		columns[i].IsDate = false
 
@@ -325,7 +325,7 @@ func analyzeColumns(headers []string, rows [][]string) []ColumnInfo {
 				columns[i].DataType = "DATE"
 			}
 		} else if hasText {
-			columns[i].DataType = "TEXT"
+			columns[i].DataType = "NVARCHAR(MAX)"
 		} else if hasFloat || columns[i].IsMoney {
 			if columns[i].IsMoney {
 				columns[i].DataType = "DECIMAL(15,2)"
@@ -413,19 +413,28 @@ func generateSQL(tableName string, dbName string, columns []ColumnInfo, rows [][
 	writer := bufio.NewWriter(f)
 	defer writer.Flush()
 
-	writer.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s;\n", dbName))
-	writer.WriteString(fmt.Sprintf("USE %s;\n\n", dbName))
-	writer.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n", tableName))
-	writer.WriteString("    id INTEGER PRIMARY KEY AUTO_INCREMENT,\n")
+	writer.WriteString(fmt.Sprintf("IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '%s')\n", dbName))
+	writer.WriteString("BEGIN\n")
+	writer.WriteString(fmt.Sprintf("    CREATE DATABASE %s;\n", dbName))
+	writer.WriteString("END\n")
+	writer.WriteString("GO\n\n")
+	writer.WriteString(fmt.Sprintf("USE %s;\n", dbName))
+	writer.WriteString("GO\n\n")
+	writer.WriteString(fmt.Sprintf("IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = '%s')\n", tableName))
+	writer.WriteString("BEGIN\n")
+	writer.WriteString(fmt.Sprintf("    CREATE TABLE %s (\n", tableName))
+	writer.WriteString("        id INTEGER IDENTITY(1,1) PRIMARY KEY,\n")
 
 	for i, col := range columns {
-		line := fmt.Sprintf("    %s %s", col.Name, col.DataType)
+		line := fmt.Sprintf("        %s %s", col.Name, col.DataType)
 		if i < len(columns)-1 {
 			line += ","
 		}
 		writer.WriteString(line + "\n")
 	}
-	writer.WriteString(");\n\n")
+	writer.WriteString("    );\n")
+	writer.WriteString("END\n")
+	writer.WriteString("GO\n\n")
 
 	for _, row := range rows {
 		if isEmptyRow(row) {
@@ -452,7 +461,7 @@ func generateSQL(tableName string, dbName string, columns []ColumnInfo, rows [][
 			} else if col.IsDate {
 				formattedDate := formatDateValue(val)
 				values[i] = fmt.Sprintf("'%s'", formattedDate)
-			} else if col.DataType == "TEXT" {
+			} else if col.DataType == "NVARCHAR(MAX)" {
 				val = strings.ReplaceAll(val, "'", "''")
 				values[i] = fmt.Sprintf("'%s'", val)
 			} else {
@@ -463,6 +472,7 @@ func generateSQL(tableName string, dbName string, columns []ColumnInfo, rows [][
 		writer.WriteString(strings.Join(values, ", "))
 		writer.WriteString(");\n")
 	}
+	writer.WriteString("GO\n")
 
 	fmt.Printf("SQL file generated: %s\n", outputFile)
 }
