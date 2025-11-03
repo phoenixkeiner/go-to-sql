@@ -51,8 +51,9 @@ Or if built:
 ```
 
 3. Follow the prompts:
-   - Enter a database name
    - Confirm processing all files
+   - Enter a database name
+   - Choose Microsoft SQL, MySQL or standard SQL
    - For each file, enter a custom table name or press Enter to use the filename
 
 4. The program generates SQL files named `{tablename}_{database}.sql` for each processed file
